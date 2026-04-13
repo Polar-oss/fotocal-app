@@ -21,14 +21,14 @@ export async function startCheckoutAction(planSlug: PlanSlug) {
     redirect("/sign-in?next=/pricing");
   }
 
+  let checkoutUrl: string;
+
   try {
-    const checkoutUrl = await createCheckoutUrl({
+    checkoutUrl = await createCheckoutUrl({
       email: user.email,
       planSlug,
       userId: user.id,
     });
-
-    redirect(checkoutUrl);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Nao foi possivel abrir o checkout.";
@@ -57,4 +57,6 @@ export async function startCheckoutAction(planSlug: PlanSlug) {
 
     redirect(`/pricing?checkout=error&detail=${detail}`);
   }
+
+  redirect(checkoutUrl);
 }
