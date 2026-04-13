@@ -32,6 +32,7 @@ export async function startCheckoutAction(planSlug: PlanSlug) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Nao foi possivel abrir o checkout.";
+    const detail = encodeURIComponent(message.slice(0, 220));
 
     console.error(`stripe_checkout_error_message:${message}`);
     console.error(
@@ -54,6 +55,6 @@ export async function startCheckoutAction(planSlug: PlanSlug) {
       redirect("/pricing?checkout=checkout-disabled");
     }
 
-    redirect("/pricing?checkout=error");
+    redirect(`/pricing?checkout=error&detail=${detail}`);
   }
 }
