@@ -33,12 +33,10 @@ export async function startCheckoutAction(planSlug: PlanSlug) {
     const message =
       error instanceof Error ? error.message : "Nao foi possivel abrir o checkout.";
 
-    console.error("stripe_checkout_error", {
-      message,
-      planSlug,
-      userEmail: user.email ?? null,
-      userId: user.id,
-    });
+    console.error(`stripe_checkout_error_message:${message}`);
+    console.error(
+      `stripe_checkout_error_context:plan=${planSlug};userId=${user.id};hasEmail=${Boolean(user.email)}`,
+    );
 
     if (message.includes("Nao encontrei o preco")) {
       redirect("/pricing?checkout=missing-price");
