@@ -9,10 +9,13 @@ import { hasStripeEnv } from "@/lib/stripe";
 type PricingPageProps = {
   searchParams: Promise<{
     checkout?: string;
+    detail?: string;
   }>;
 };
 
-function getCheckoutNotice(checkout?: string) {
+function getCheckoutNotice(checkout?: string, detail?: string) {
+  const normalizedDetail = detail?.trim();
+
   switch (checkout) {
     case "cancelled":
       return "O checkout foi cancelado. Seus planos continuam disponiveis para voce tentar novamente.";
@@ -27,7 +30,9 @@ function getCheckoutNotice(checkout?: string) {
     case "unavailable":
       return "As chaves do Stripe ainda nao foram adicionadas ao app. Assim que isso entrar, o checkout fica liberado.";
     case "error":
-      return "Nao foi possivel abrir o checkout agora. Tente novamente em alguns segundos.";
+      return normalizedDetail
+        ? `Nao foi possivel abrir o checkout agora. Detalhe tecnico: ${normalizedDetail}`
+        : "Nao foi possivel abrir o checkout agora. Tente novamente em alguns segundos.";
     default:
       return null;
   }
@@ -36,7 +41,7 @@ function getCheckoutNotice(checkout?: string) {
 export default async function PricingPage({ searchParams }: PricingPageProps) {
   const auth = await getAuthContext();
   const params = await searchParams;
-  const checkoutNotice = getCheckoutNotice(params.checkout);
+  const checkoutNotice = getCheckoutNotice(params.checkout, params.detail);
   const signUpHref = "/sign-up?next=/pricing";
   const primaryHref = auth.isAuthenticated ? "/app" : signUpHref;
   const primaryLabel = auth.isAuthenticated ? "Abrir meu app" : "Comecar por R$ 12";
