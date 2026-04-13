@@ -8,6 +8,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { hasAiEnv } from "@/lib/ai/env";
 import { getAuthContext } from "@/lib/auth";
 import { getTrackerBootstrap } from "@/lib/fotocal/server";
+import { getSubscriptionStatusLabel } from "@/lib/subscriptions";
 
 type AppPageProps = {
   searchParams: Promise<{
@@ -44,6 +45,16 @@ export default async function AppPage({ searchParams }: AppPageProps) {
   const tracker = await getTrackerBootstrap(auth.user?.id ?? null);
   const today = new Date().toISOString().slice(0, 10);
   const todayMealsCount = tracker.meals.filter((meal) => meal.loggedDate === today).length;
+  const subscriptionLabel = auth.subscription?.isActive
+    ? auth.subscription.planLabel ?? "Premium ativo"
+    : "Sem premium";
+  const subscriptionNote = auth.subscription?.isActive
+    ? auth.subscription.currentPeriodEnd
+      ? `status ${getSubscriptionStatusLabel(auth.subscription.status)} ate ${new Date(
+          auth.subscription.currentPeriodEnd,
+        ).toLocaleDateString("pt-BR")}`
+      : `status ${getSubscriptionStatusLabel(auth.subscription.status)}`
+    : "ative um plano para acompanhar a assinatura dentro do app";
 
   const cards = [
     {
@@ -74,6 +85,11 @@ export default async function AppPage({ searchParams }: AppPageProps) {
       note: tracker.friends.length
         ? "compartilhe apenas o que fizer sentido para voce"
         : "o social e opcional, o app funciona muito bem sozinho",
+    },
+    {
+      title: "Assinatura",
+      value: subscriptionLabel,
+      note: subscriptionNote,
     },
   ];
 
@@ -125,6 +141,11 @@ export default async function AppPage({ searchParams }: AppPageProps) {
                   ? "Historico sincronizado"
                   : "Salvando neste navegador"}
               </span>
+              {auth.subscription?.isActive ? (
+                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/12 px-4 py-2 text-sm font-medium text-emerald-100">
+                  {auth.subscription.planLabel ?? "Premium ativo"}
+                </span>
+              ) : null}
             </div>
 
             <div className="mt-8 rounded-[1.5rem] border border-emerald-400/30 bg-emerald-400/10 p-5">

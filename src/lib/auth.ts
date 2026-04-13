@@ -1,5 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { getUserSubscription } from "@/lib/subscriptions/server";
+import type { AppSubscription } from "@/lib/subscriptions";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 
@@ -8,6 +10,7 @@ type AuthContext = {
   displayName: string;
   isAuthenticated: boolean;
   isConfigured: boolean;
+  subscription: AppSubscription | null;
   user: User | null;
 };
 
@@ -81,6 +84,7 @@ export async function getAuthContext(): Promise<AuthContext> {
       displayName: "voce",
       isAuthenticated: false,
       isConfigured: false,
+      subscription: null,
       user: null,
     };
   }
@@ -101,6 +105,7 @@ export async function getAuthContext(): Promise<AuthContext> {
       displayName: "voce",
       isAuthenticated: false,
       isConfigured: true,
+      subscription: null,
       user: null,
     };
   }
@@ -108,12 +113,14 @@ export async function getAuthContext(): Promise<AuthContext> {
   const profileGoal = user
     ? await getGoalFromProfile(user.id, supabase)
     : null;
+  const subscription = user ? await getUserSubscription(user.id) : null;
 
   return {
     calorieGoal: cookieGoal ?? profileGoal ?? getGoalFromMetadata(user),
     displayName: getDisplayName(user),
     isAuthenticated: Boolean(user),
     isConfigured: true,
+    subscription,
     user,
   };
 }

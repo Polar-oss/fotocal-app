@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
+import { getAuthContext } from "@/lib/auth";
+import {
+  getPlanLabel,
+  getSubscriptionStatusLabel,
+} from "@/lib/subscriptions";
+import { syncSubscriptionFromCheckoutSession } from "@/lib/subscriptions/server";
 import { getCheckoutSession } from "@/lib/stripe";
 
 type PricingSuccessPageProps = {
@@ -8,35 +14,35 @@ type PricingSuccessPageProps = {
   }>;
 };
 
-function getSubscriptionStatusLabel(rawStatus?: string | null) {
-  switch (rawStatus) {
-    case "active":
-      return "ativa";
-    case "trialing":
-      return "em teste";
-    case "past_due":
-      return "pendente";
-    default:
-      return "em processamento";
-  }
-}
-
 export default async function PricingSuccessPage({
   searchParams,
 }: PricingSuccessPageProps) {
+  const auth = await getAuthContext();
   const params = await searchParams;
   const sessionId = params.session_id;
   const session = sessionId
     ? await getCheckoutSession(sessionId).catch(() => null)
     : null;
+  const syncedSubscription =
+    session && auth.user
+      ? await syncSubscriptionFromCheckoutSession({
+          session,
+          userId: auth.user.id,
+        }).catch(() => null)
+      : null;
   const subscription =
     session?.subscription && typeof session.subscription === "object"
       ? session.subscription
       : null;
-  const subscriptionStatus =
-    subscription?.status
-      ? getSubscriptionStatusLabel(subscription.status)
-      : "em processamento";
+  const subscriptionStatus = getSubscriptionStatusLabel(
+    syncedSubscription?.status ?? subscription?.status,
+  );
+  const planLabel =
+    syncedSubscription?.planLabel ??
+    getPlanLabel(session?.metadata?.plan_slug ?? subscription?.metadata?.plan_slug);
+  const syncedPeriodLabel = syncedSubscription?.currentPeriodEnd
+    ? new Date(syncedSubscription.currentPeriodEnd).toLocaleDateString("pt-BR")
+    : null;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#060606_60%,_#0b0b0b_100%)] px-4 py-6 sm:px-6 lg:px-8">
@@ -59,12 +65,12 @@ export default async function PricingSuccessPage({
             Seu checkout foi concluido com sucesso.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-white/78">
-            O FotoCal ja recebeu a sua assinatura. Agora voce pode voltar para o
-            app e seguir registrando refeicoes com mais tranquilidade.
+            O FotoCal ja reconheceu a sua assinatura e o seu acesso premium foi
+            vinculado a esta conta.
           </p>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2">
+        <section className="grid gap-4 md:grid-cols-3">
           <article className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
             <p className="text-sm font-medium text-white/60">Email usado</p>
             <strong className="mt-3 block text-2xl tracking-tight text-white">
@@ -78,6 +84,18 @@ export default async function PricingSuccessPage({
               {subscriptionStatus}
             </strong>
           </article>
+
+          <article className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
+            <p className="text-sm font-medium text-white/60">Plano atual</p>
+            <strong className="mt-3 block text-2xl tracking-tight text-white">
+              {planLabel ?? "Plano confirmado"}
+            </strong>
+            {syncedPeriodLabel ? (
+              <span className="mt-3 block text-sm leading-7 text-white/62">
+                Ciclo atual ate {syncedPeriodLabel}
+              </span>
+            ) : null}
+          </article>
         </section>
 
         <section className="rounded-[2rem] border border-white/10 bg-[#0b0b0b] p-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.48)]">
@@ -85,8 +103,8 @@ export default async function PricingSuccessPage({
             Proximo passo
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-white/70">
-            Volte para o app, registre sua proxima refeicao e, se quiser, me
-            chame para eu ligar o controle de acesso por assinatura no painel.
+            Volte para o app, registre sua proxima refeicao e acompanhe seu dia
+            com a conta premium ja ativa.
           </p>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">

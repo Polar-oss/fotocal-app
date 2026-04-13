@@ -5,6 +5,7 @@ import { PricingGrid } from "@/components/pricing-grid";
 import { SectionHeading } from "@/components/section-heading";
 import { getAuthContext } from "@/lib/auth";
 import { hasStripeEnv } from "@/lib/stripe";
+import { getSubscriptionStatusLabel } from "@/lib/subscriptions";
 
 type PricingPageProps = {
   searchParams: Promise<{
@@ -46,6 +47,11 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
   const primaryHref = auth.isAuthenticated ? "/app" : signUpHref;
   const primaryLabel = auth.isAuthenticated ? "Abrir meu app" : "Comecar por R$ 12";
   const checkoutEnabled = auth.isAuthenticated && hasStripeEnv();
+  const subscriptionNotice = auth.subscription?.isActive
+    ? `${auth.subscription.planLabel ?? "Premium"} com assinatura ${getSubscriptionStatusLabel(
+        auth.subscription.status,
+      )}.`
+    : null;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#060606_60%,_#0b0b0b_100%)] px-4 py-6 sm:px-6 lg:px-8">
@@ -63,6 +69,12 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
         {checkoutNotice ? (
           <section className="rounded-[1.5rem] border border-amber-400/25 bg-amber-400/10 px-5 py-4 text-sm leading-7 text-amber-50">
             {checkoutNotice}
+          </section>
+        ) : null}
+
+        {subscriptionNotice ? (
+          <section className="rounded-[1.5rem] border border-emerald-400/25 bg-emerald-400/10 px-5 py-4 text-sm leading-7 text-emerald-50">
+            Sua conta ja esta com {subscriptionNotice}
           </section>
         ) : null}
 

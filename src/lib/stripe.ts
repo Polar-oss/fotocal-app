@@ -27,15 +27,23 @@ type StripeListResponse<T> = {
   data: T[];
 };
 
-type StripeCheckoutSession = {
+type StripeSubscription = {
+  cancel_at_period_end?: boolean | null;
+  current_period_end?: number | null;
+  id: string;
+  metadata?: Record<string, string> | null;
+  status: string | null;
+};
+
+export type StripeCheckoutSession = {
+  client_reference_id?: string | null;
+  customer?: string | null;
   customer_email: string | null;
   id: string;
+  metadata?: Record<string, string> | null;
   status: string | null;
   subscription:
-    | {
-        id: string;
-        status: string | null;
-      }
+    | StripeSubscription
     | string
     | null;
   url: string | null;
