@@ -21,7 +21,8 @@ export const pricingPlans: PricingPlan[] = [
     monthlyPrice: "R$ 12",
     name: "Plano Mensal",
     perks: [
-      "analises por foto todos os dias",
+      "analises por foto ilimitadas",
+      "calorias e macros em segundos",
       "resumo diario com total e media",
       "meta calorica personalizada",
       "historico completo e circulo opcional",
@@ -40,7 +41,8 @@ export const pricingPlans: PricingPlan[] = [
     name: "Plano Trimestral",
     note: "Economia de R$ 3,60 no periodo",
     perks: [
-      "analises por foto todos os dias",
+      "analises por foto ilimitadas",
+      "calorias e macros em segundos",
       "resumo diario com total e media",
       "meta calorica personalizada",
       "historico completo e circulo opcional",
@@ -59,7 +61,8 @@ export const pricingPlans: PricingPlan[] = [
     name: "Plano Semestral",
     note: "Economia de R$ 14,40 no periodo",
     perks: [
-      "analises por foto todos os dias",
+      "analises por foto ilimitadas",
+      "calorias e macros em segundos",
       "resumo diario com total e media",
       "meta calorica personalizada",
       "historico completo e circulo opcional",
@@ -79,7 +82,8 @@ export const pricingPlans: PricingPlan[] = [
     name: "Plano Anual",
     note: "Economia de R$ 43,20 no periodo",
     perks: [
-      "analises por foto todos os dias",
+      "analises por foto ilimitadas",
+      "calorias e macros em segundos",
       "resumo diario com total e media",
       "meta calorica personalizada",
       "historico completo e circulo opcional",
@@ -91,10 +95,10 @@ export const pricingPlans: PricingPlan[] = [
 
 export const comparisonLists = {
   fotoCal: [
-    "tirar uma foto e receber uma estimativa em segundos",
+    "tirar uma foto e receber calorias e macros em segundos",
     "acompanhar total do dia sem planilha nem conta manual",
     "editar calorias e nome do prato quando quiser",
-    "ver meta, historico e progresso em poucos toques",
+    "ver meta, historico, progresso e orientacao em poucos toques",
   ],
   manual: [
     "pesar alimentos e chutar porcao o tempo todo",
@@ -112,17 +116,22 @@ export const featureSteps = [
   },
   {
     text:
-      "A IA sugere nome da refeicao e calorias estimadas em segundos, sem obrigar voce a preencher tudo do zero.",
+      "A IA sugere nome da refeicao, calorias e macros em segundos, sem obrigar voce a preencher tudo do zero.",
     title: "Receba a analise",
   },
   {
     text:
-      "Veja total do dia, media por refeicao e meta restante sem transformar alimentacao em uma tarefa pesada.",
+      "Veja total do dia, media por refeicao, meta restante e sugestoes simples sem transformar alimentacao em uma tarefa pesada.",
     title: "Acompanhe o dia",
   },
 ];
 
 export const faqItems = [
+  {
+    answer:
+      "Sim. A conta gratuita deixa voce testar 3 analises por foto por dia. Quando esse limite acaba, voce ainda pode registrar manualmente ou assinar um plano premium para liberar uso ilimitado.",
+    question: "Quantas analises gratis eu tenho por dia?",
+  },
   {
     answer:
       "A leitura por foto e uma estimativa inteligente, nao um laudo. O FotoCal acelera o processo e voce continua no controle para ajustar calorias, nome do prato e observacoes antes de salvar.",
@@ -135,7 +144,7 @@ export const faqItems = [
   },
   {
     answer:
-      "Apps gratis costumam transferir o trabalho para voce: buscar alimento, estimar porcao e digitar tudo manualmente. O FotoCal existe para reduzir essa friccao com foto, estimativa, resumo e historico no mesmo lugar.",
+      "Apps gratis costumam transferir o trabalho para voce: buscar alimento, estimar porcao e digitar tudo manualmente. O FotoCal existe para reduzir essa friccao com foto, estimativa, macros, resumo e historico no mesmo lugar.",
     question: "Por que pagar se existem apps gratis?",
   },
   {

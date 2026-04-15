@@ -1,9 +1,15 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import type { ChangeEvent, FormEvent } from "react";
 import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  FREE_AI_ANALYSES_PER_DAY,
+  type AiUsageSnapshot,
+} from "@/lib/ai/limits";
 import { MEAL_IMAGE_MAX_BYTES } from "@/lib/fotocal/constants";
+import type { UserObjective } from "@/lib/profile";
 import type {
   Friend,
   MealEntry,
@@ -11,15 +17,22 @@ import type {
 } from "@/lib/fotocal/types";
 
 type MealAnalysis = {
+  carbs_g: number;
   confidence: "alta" | "baixa" | "media";
+  diet_feedback: string;
   estimated_calories: number;
+  fats_g: number;
   foods: string[];
+  intake_signal: "abaixo" | "equilibrado" | "acima";
   notes_suggestion: string;
+  next_meal_suggestion: string;
+  protein_g: number;
   rationale: string;
   title: string;
 };
 
 type MealTrackerProps = {
+  aiUsage: AiUsageSnapshot;
   calorieGoal: number | null;
   isAiEnabled: boolean;
   initialFriends: Friend[];
@@ -27,6 +40,7 @@ type MealTrackerProps = {
   persistenceMode: PersistenceMode;
   statusMessage?: string;
   storageNamespace: string;
+  userObjective: UserObjective | null;
 };
 
 type FormState = {
@@ -59,6 +73,10 @@ function getDefaultFormState(): FormState {
 
 function formatCalories(value: number) {
   return `${value.toLocaleString("pt-BR")} kcal`;
+}
+
+function formatMacro(value: number) {
+  return `${Math.round(value)}g`;
 }
 
 function formatDateLabel(value: string) {
@@ -113,11 +131,13 @@ function isFriend(value: unknown): value is Friend {
 
 type ErrorPayload = {
   error?: string;
+  usage?: AiUsageSnapshot;
 };
 
 type SuccessPayload<T> = {
   data: T;
   message?: string;
+  usage?: AiUsageSnapshot;
 };
 
 function getErrorFromPayload(payload: ErrorPayload | Record<string, unknown>) {
@@ -128,7 +148,130 @@ function getMessageFromPayload(payload: Record<string, unknown>) {
   return typeof payload.message === "string" ? payload.message : null;
 }
 
+function getCurrentStreak(meals: MealEntry[]) {
+  const uniqueDates = Array.from(new Set(meals.map((meal) => meal.loggedDate))).sort(
+    (left, right) => right.localeCompare(left),
+  );
+
+  if (!uniqueDates.length) {
+    return 0;
+  }
+
+  let streak = 0;
+  const cursor = new Date();
+
+  while (true) {
+    const current = cursor.toISOString().slice(0, 10);
+
+    if (!uniqueDates.includes(current)) {
+      break;
+    }
+
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function getProgressPercentage(totalCalories: number, calorieGoal: number | null) {
+  if (!calorieGoal || calorieGoal <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round((totalCalories / calorieGoal) * 100)));
+}
+
+function buildAssistantNote(analysis: MealAnalysis) {
+  return [
+    `Macros estimados: ${Math.round(analysis.protein_g)}g proteina, ${Math.round(
+      analysis.carbs_g,
+    )}g carboidratos, ${Math.round(analysis.fats_g)}g gordura.`,
+    `Proxima refeicao: ${analysis.next_meal_suggestion}`,
+    `Leitura da IA: ${analysis.diet_feedback}`,
+  ].join(" ");
+}
+
+function getDailyGuidance(input: {
+  calorieGoal: number | null;
+  objective: UserObjective | null;
+  totalCalories: number;
+}) {
+  const { calorieGoal, objective, totalCalories } = input;
+
+  if (!calorieGoal) {
+    return {
+      title: "Defina sua meta",
+      text: "Quando a meta entra, o FotoCal consegue dizer com mais clareza se voce esta acelerando, equilibrando ou exagerando no dia.",
+    };
+  }
+
+  const remaining = calorieGoal - totalCalories;
+
+  if (objective === "emagrecer") {
+    if (remaining > 450) {
+      return {
+        title: "Ainda ha espaco no dia",
+        text: "Feche com uma refeicao mais leve, com proteina e boa saciedade, para chegar perto da meta sem exagerar.",
+      };
+    }
+
+    if (remaining >= 0) {
+      return {
+        title: "Perto da meta",
+        text: "Voce esta chegando bem perto. Se ainda for comer, priorize uma opcao leve e com mais proteina.",
+      };
+    }
+
+    return {
+      title: "Acima da meta",
+      text: "Sem drama. A proxima refeicao pode ser mais leve, com vegetais, agua e proteina para equilibrar o restante do dia.",
+    };
+  }
+
+  if (objective === "ganhar-massa") {
+    if (remaining > 500) {
+      return {
+        title: "Ainda faltam calorias",
+        text: "Uma refeicao com proteina + carboidrato pode ajudar voce a aproximar a meta sem depender de beliscos aleatorios.",
+      };
+    }
+
+    if (remaining >= 0) {
+      return {
+        title: "Bom ritmo",
+        text: "Voce esta em uma faixa boa. Mantenha proteina consistente e um fechamento inteligente no restante do dia.",
+      };
+    }
+
+    return {
+      title: "Passou da meta",
+      text: "Se exagerou um pouco, vale fechar o dia com mais leveza e manter a proteina alta nas proximas refeicoes.",
+    };
+  }
+
+  if (remaining > 350) {
+    return {
+      title: "Dia ainda aberto",
+      text: "Uma refeicao equilibrada com proteina, carboidrato e gordura moderada ajuda a fechar o dia com mais estabilidade.",
+    };
+  }
+
+  if (remaining >= 0) {
+    return {
+      title: "Equilibrio bom",
+      text: "Seu dia esta caminhando bem. Vale so manter porcoes parecidas nas proximas escolhas.",
+    };
+  }
+
+  return {
+    title: "Passou um pouco",
+    text: "O mais util agora e aliviar a proxima refeicao e observar o ritmo do dia, sem transformar isso em culpa.",
+  };
+}
+
 export function MealTracker({
+  aiUsage: initialAiUsage,
   calorieGoal,
   isAiEnabled,
   initialFriends,
@@ -136,6 +279,7 @@ export function MealTracker({
   persistenceMode,
   statusMessage,
   storageNamespace,
+  userObjective,
 }: MealTrackerProps) {
   const [form, setForm] = useState<FormState>(getDefaultFormState);
   const [meals, setMeals] = useState<MealEntry[]>(initialMeals);
@@ -146,14 +290,42 @@ export function MealTracker({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [shareMeal, setShareMeal] = useState(false);
   const [analysis, setAnalysis] = useState<MealAnalysis | null>(null);
+  const [aiUsage, setAiUsage] = useState<AiUsageSnapshot>(initialAiUsage);
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
   const [isSavingMeal, setIsSavingMeal] = useState(false);
   const [isSavingFriend, setIsSavingFriend] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const hasLoadedStorage = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const mealFormRef = useRef<HTMLElement | null>(null);
 
   const isLocalMode = persistenceMode === "local";
+  const aiLimitReached = !aiUsage.isPremium && aiUsage.reachedLimit;
+  const aiStatusLabel = aiUsage.isPremium
+    ? "Premium com analises ilimitadas"
+    : aiLimitReached
+      ? "Limite gratis do dia atingido"
+      : `${aiUsage.remainingToday ?? 0} de ${FREE_AI_ANALYSES_PER_DAY} analises gratis restantes hoje`;
+  const aiStatusNote = aiUsage.isPremium
+    ? "Seu plano premium libera foto com IA sem travar no meio da rotina."
+    : aiLimitReached
+      ? "Voce ainda pode registrar refeicoes manualmente, ou assinar para liberar a IA sem limite."
+      : `Voce ja usou ${aiUsage.usedToday} analise${aiUsage.usedToday === 1 ? "" : "s"} hoje.`;
+  const showUpgradePanel =
+    !aiUsage.isPremium &&
+    (aiLimitReached || (aiUsage.remainingToday ?? FREE_AI_ANALYSES_PER_DAY) <= 1);
+  const upgradeHref = aiLimitReached ? "/pricing?source=ai-limit" : "/pricing?source=free";
+  const upgradeTitle = aiLimitReached
+    ? "Sua IA gratuita travou por hoje."
+    : "Voce esta quase no limite gratis de hoje.";
+  const upgradeText = aiLimitReached
+    ? "Se quiser continuar usando foto + macros agora, o premium libera analises ilimitadas e deixa a rotina sem interrupcao."
+    : "Ainda da para usar mais um pouco hoje, mas o premium remove esse limite e evita que a rotina trave quando voce estiver usando bem o app.";
+
+  useEffect(() => {
+    setAiUsage(initialAiUsage);
+  }, [initialAiUsage]);
 
   useEffect(() => {
     if (!isLocalMode) {
@@ -212,6 +384,22 @@ export function MealTracker({
     );
   }, [friends, isLocalMode, storageNamespace]);
 
+  useEffect(() => {
+    function handleOpenCamera() {
+      mealFormRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      fileInputRef.current?.click();
+    }
+
+    window.addEventListener("fotocal:open-camera", handleOpenCamera);
+
+    return () => {
+      window.removeEventListener("fotocal:open-camera", handleOpenCamera);
+    };
+  }, []);
+
   const mealsForSelectedDate = meals
     .filter((meal) => meal.loggedDate === selectedDate)
     .sort((a, b) => b.eatenAt.localeCompare(a.eatenAt));
@@ -237,6 +425,13 @@ export function MealTracker({
     ? Math.round(totalCalories / mealsForSelectedDate.length)
     : 0;
   const remainingCalories = calorieGoal ? calorieGoal - totalCalories : null;
+  const progressPercentage = getProgressPercentage(totalCalories, calorieGoal);
+  const streak = getCurrentStreak(meals);
+  const dailyGuidance = getDailyGuidance({
+    calorieGoal,
+    objective: userObjective,
+    totalCalories,
+  });
 
   function clearFeedback() {
     setErrorMessage("");
@@ -386,6 +581,13 @@ export function MealTracker({
       return;
     }
 
+    if (aiLimitReached) {
+      setErrorMessage(
+        "Seu plano gratuito ja usou as 3 analises de hoje. Assine o premium para liberar uso ilimitado ou volte amanha.",
+      );
+      return;
+    }
+
     setIsAnalyzingPhoto(true);
     clearFeedback();
 
@@ -395,6 +597,16 @@ export function MealTracker({
 
       if (form.title.trim()) {
         payload.set("titleHint", form.title.trim());
+      }
+
+      if (calorieGoal) {
+        payload.set("calorieGoal", String(calorieGoal));
+      }
+
+      payload.set("currentDayCalories", String(totalCalories));
+
+      if (userObjective) {
+        payload.set("objective", userObjective);
       }
 
       const response = await fetch("/api/meals/analyze", {
@@ -407,6 +619,9 @@ export function MealTracker({
         | SuccessPayload<MealAnalysis>;
 
       if (!response.ok || !("data" in json)) {
+        if (json.usage) {
+          setAiUsage(json.usage);
+        }
         throw new Error(
           getErrorFromPayload(json) ??
             "Nao foi possivel analisar essa foto agora.",
@@ -414,12 +629,15 @@ export function MealTracker({
       }
 
       setAnalysis(json.data);
+      if (json.usage) {
+        setAiUsage(json.usage);
+      }
       setForm((currentForm) => ({
         ...currentForm,
         calories: String(json.data.estimated_calories),
         notes: currentForm.notes.trim()
           ? currentForm.notes
-          : json.data.notes_suggestion,
+          : buildAssistantNote(json.data),
         title: json.data.title,
       }));
       setSuccessMessage(
@@ -566,12 +784,12 @@ export function MealTracker({
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-white/62">
               O fluxo principal do FotoCal precisa ser leve: abrir, registrar,
-              revisar e seguir o dia. A IA acelera esse caminho, mas o app nao
-              depende dela para ser util.
+              revisar e seguir o dia. A IA agora ajuda com calorias, macros e
+              um proximo passo util, mas o app continua simples de usar.
             </p>
           </div>
 
-        <div className="flex flex-col items-start gap-3 lg:items-end">
+          <div className="flex flex-col items-start gap-3 lg:items-end">
             <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200">
               {isLocalMode ? "Modo local ativo" : "Banco real ativo"}
             </span>
@@ -625,6 +843,43 @@ export function MealTracker({
           </article>
         </div>
 
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <article className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-white/60">Progresso do dia</p>
+              <span className="text-sm font-semibold text-emerald-200">
+                {calorieGoal ? `${progressPercentage}%` : "sem meta"}
+              </span>
+            </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-200 transition-all"
+                style={{ width: calorieGoal ? `${progressPercentage}%` : "0%" }}
+              />
+            </div>
+            <p className="mt-4 text-sm leading-7 text-white/62">
+              {calorieGoal
+                ? `Voce consumiu ${formatCalories(totalCalories)} de ${formatCalories(calorieGoal)}.`
+                : "Defina a meta para visualizar com mais clareza o ritmo do dia."}
+            </p>
+          </article>
+
+          <article className="rounded-[1.5rem] border border-emerald-500/20 bg-emerald-500/10 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-emerald-50">Guia inteligente</p>
+              <span className="rounded-full bg-black/20 px-3 py-1 text-xs font-semibold text-emerald-100">
+                streak {streak}d
+              </span>
+            </div>
+            <strong className="mt-4 block text-xl text-white">
+              {dailyGuidance.title}
+            </strong>
+            <p className="mt-3 text-sm leading-7 text-emerald-50/85">
+              {dailyGuidance.text}
+            </p>
+          </article>
+        </div>
+
         {statusMessage ? (
           <div className="mt-6 rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm leading-7 text-amber-50">
             {statusMessage}
@@ -645,7 +900,11 @@ export function MealTracker({
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <article className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
+        <article
+          id="registro-refeicao"
+          ref={mealFormRef}
+          className="scroll-mt-28 rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur"
+        >
           <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-emerald-300">
             Nova refeicao
           </p>
@@ -653,9 +912,9 @@ export function MealTracker({
             Adicione uma refeicao agora
           </h3>
           <p className="mt-3 text-sm leading-7 text-white/62">
-            Envie uma foto para receber uma sugestao de nome e calorias ou
-            preencha tudo por conta propria. O importante e registrar com
-            consistencia.
+            Envie uma foto para receber uma sugestao de nome, calorias, macros
+            e uma orientacao curta sobre o que fazer depois. O importante e
+            registrar com consistencia.
           </p>
 
           <form className="mt-6 grid gap-5" onSubmit={handleMealSubmit}>
@@ -732,11 +991,16 @@ export function MealTracker({
               <label className="grid gap-2 text-sm font-medium text-white/85">
                 Foto da refeicao
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   onChange={handleImageChange}
                   className="rounded-2xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-4 text-sm text-white/62 file:mr-3 file:rounded-full file:border-0 file:bg-emerald-600 file:px-4 file:py-2 file:text-white"
                 />
+                <span className="text-xs leading-6 text-white/45">
+                  No celular, a camera traseira vira a opcao principal para deixar o registro mais rapido.
+                </span>
               </label>
 
               <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
@@ -762,7 +1026,7 @@ export function MealTracker({
               <button
                 type="button"
                 onClick={() => void handleAnalyzePhoto()}
-                disabled={!selectedFile || isAnalyzingPhoto}
+                disabled={!selectedFile || isAnalyzingPhoto || aiLimitReached}
                 className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isAnalyzingPhoto
@@ -777,11 +1041,84 @@ export function MealTracker({
               ) : null}
             </div>
 
+            <div
+              className={`rounded-[1.5rem] border px-4 py-3 text-sm leading-7 ${
+                aiUsage.isPremium
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-50"
+                  : aiLimitReached
+                    ? "border-amber-500/25 bg-amber-500/10 text-amber-50"
+                    : "border-white/10 bg-white/[0.03] text-white/72"
+              }`}
+            >
+              <strong className="block text-sm text-white">{aiStatusLabel}</strong>
+              <p className="mt-2">{aiStatusNote}</p>
+              {!aiUsage.isPremium ? (
+                <Link
+                  href="/pricing"
+                  className="mt-3 inline-flex text-sm font-semibold text-emerald-200 transition hover:text-emerald-100"
+                >
+                  Ver planos premium
+                </Link>
+              ) : null}
+            </div>
+
+            {showUpgradePanel ? (
+              <div className="rounded-[1.5rem] border border-amber-400/25 bg-[linear-gradient(135deg,rgba(245,158,11,0.14),rgba(16,185,129,0.08))] p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-2xl">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.24em] text-amber-200">
+                      Upgrade premium
+                    </p>
+                    <h4 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-white">
+                      {upgradeTitle}
+                    </h4>
+                    <p className="mt-3 text-sm leading-7 text-white/78">
+                      {upgradeText}
+                    </p>
+                    <ul className="mt-4 space-y-2 text-sm leading-7 text-white/74">
+                      {[
+                        "analises por foto sem limite diario",
+                        "macros e sugestao da proxima refeicao em todas as leituras",
+                        "historico completo e rotina premium sem travas",
+                      ].map((item) => (
+                        <li key={item} className="flex gap-3">
+                          <span className="mt-2 h-2 w-2 rounded-full bg-amber-300" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="grid gap-3 lg:min-w-[260px]">
+                    <Link
+                      href={upgradeHref}
+                      className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:bg-amber-50"
+                    >
+                      Liberar premium
+                    </Link>
+                    <Link
+                      href="/pricing?source=annual"
+                      className="inline-flex items-center justify-center rounded-full border border-white/12 bg-white/[0.05] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08]"
+                    >
+                      Ver melhor oferta
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {analysis ? (
               <div className="rounded-[1.5rem] border border-emerald-500/25 bg-emerald-500/10 p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-black/35 px-3 py-1 text-xs font-semibold text-white">
                     Confianca {analysis.confidence}
+                  </span>
+                  <span className="rounded-full bg-black/30 px-3 py-1 text-xs font-medium text-white/80">
+                    {analysis.intake_signal === "abaixo"
+                      ? "abaixo da meta"
+                      : analysis.intake_signal === "acima"
+                        ? "acima da meta"
+                        : "ritmo equilibrado"}
                   </span>
                   {analysis.foods.map((food) => (
                     <span
@@ -792,9 +1129,53 @@ export function MealTracker({
                     </span>
                   ))}
                 </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-white/50">
+                      Proteina
+                    </p>
+                    <strong className="mt-2 block text-xl text-white">
+                      {formatMacro(analysis.protein_g)}
+                    </strong>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-white/50">
+                      Carboidratos
+                    </p>
+                    <strong className="mt-2 block text-xl text-white">
+                      {formatMacro(analysis.carbs_g)}
+                    </strong>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-white/50">
+                      Gordura
+                    </p>
+                    <strong className="mt-2 block text-xl text-white">
+                      {formatMacro(analysis.fats_g)}
+                    </strong>
+                  </div>
+                </div>
                 <p className="mt-4 text-sm leading-7 text-emerald-50/90">
                   {analysis.rationale}
                 </p>
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-200">
+                      Proxima refeicao
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-white/82">
+                      {analysis.next_meal_suggestion}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-200">
+                      Leitura da dieta
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-white/82">
+                      {analysis.diet_feedback}
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -824,7 +1205,10 @@ export function MealTracker({
           </form>
         </article>
 
-        <article className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
+        <article
+          id="resumo-dia"
+          className="scroll-mt-28 rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur"
+        >
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-emerald-300">
@@ -904,7 +1288,10 @@ export function MealTracker({
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <article className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur">
+        <article
+          id="circulo-app"
+          className="scroll-mt-28 rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur"
+        >
           <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-emerald-300">
             Circulo opcional
           </p>

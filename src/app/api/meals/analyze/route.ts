@@ -1,14 +1,23 @@
 import { NextResponse } from "next/server";
 import { MEAL_IMAGE_MAX_BYTES } from "@/lib/fotocal/constants";
 import { getAiConfig } from "@/lib/ai/env";
+import { getAiUsageSnapshot } from "@/lib/ai/limits";
+import { incrementAiUsage } from "@/lib/ai/usage";
+import { getUserSubscription } from "@/lib/subscriptions/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 type MealAnalysis = {
+  carbs_g: number;
   confidence: "alta" | "baixa" | "media";
+  diet_feedback: string;
   estimated_calories: number;
+  fats_g: number;
   foods: string[];
+  intake_signal: "abaixo" | "equilibrado" | "acima";
   notes_suggestion: string;
+  next_meal_suggestion: string;
+  protein_g: number;
   rationale: string;
   title: string;
 };
@@ -64,21 +73,36 @@ function parseAnalysisPayload(content: string): MealAnalysis | null {
     const parsed = JSON.parse(content) as Partial<MealAnalysis>;
 
     if (
+      typeof parsed.carbs_g === "number" &&
       typeof parsed.title === "string" &&
+      typeof parsed.protein_g === "number" &&
+      typeof parsed.fats_g === "number" &&
+      typeof parsed.diet_feedback === "string" &&
       typeof parsed.estimated_calories === "number" &&
       Array.isArray(parsed.foods) &&
       parsed.foods.every((item) => typeof item === "string") &&
+      typeof parsed.intake_signal === "string" &&
       typeof parsed.rationale === "string" &&
       typeof parsed.notes_suggestion === "string" &&
+      typeof parsed.next_meal_suggestion === "string" &&
+      (parsed.intake_signal === "abaixo" ||
+        parsed.intake_signal === "equilibrado" ||
+        parsed.intake_signal === "acima") &&
       (parsed.confidence === "alta" ||
         parsed.confidence === "media" ||
         parsed.confidence === "baixa")
     ) {
       return {
+        carbs_g: Math.max(0, Math.round(parsed.carbs_g)),
         confidence: parsed.confidence,
+        diet_feedback: parsed.diet_feedback,
         estimated_calories: Math.max(1, Math.round(parsed.estimated_calories)),
+        fats_g: Math.max(0, Math.round(parsed.fats_g)),
         foods: parsed.foods,
+        intake_signal: parsed.intake_signal,
         notes_suggestion: parsed.notes_suggestion,
+        next_meal_suggestion: parsed.next_meal_suggestion,
+        protein_g: Math.max(0, Math.round(parsed.protein_g)),
         rationale: parsed.rationale,
         title: parsed.title,
       };
@@ -118,12 +142,15 @@ function getGeminiOutputText(payload: GeminiResponsePayload) {
   return "";
 }
 
-function getPrompt(hintText: string) {
+function getPrompt(hintText: string, contextText: string) {
   return (
     "Voce e um assistente de nutricao visual para um app chamado FotoCal. " +
     "Analise a foto de uma refeicao e devolva uma estimativa util, honesta e conservadora. " +
     "A estimativa deve considerar apenas o que parece visivel na imagem. Nunca invente itens ausentes. " +
+    "Use nomes comuns no Brasil quando isso fizer sentido para a refeicao. " +
     "Sempre produza o JSON solicitado. " +
+    contextText +
+    " " +
     hintText
   );
 }
@@ -131,11 +158,20 @@ function getPrompt(hintText: string) {
 const analysisSchema = {
   additionalProperties: false,
   properties: {
+    carbs_g: {
+      type: "number",
+    },
     confidence: {
       enum: ["baixa", "media", "alta"],
       type: "string",
     },
+    diet_feedback: {
+      type: "string",
+    },
     estimated_calories: {
+      type: "number",
+    },
+    fats_g: {
       type: "number",
     },
     foods: {
@@ -144,8 +180,18 @@ const analysisSchema = {
       },
       type: "array",
     },
+    intake_signal: {
+      enum: ["abaixo", "equilibrado", "acima"],
+      type: "string",
+    },
     notes_suggestion: {
       type: "string",
+    },
+    next_meal_suggestion: {
+      type: "string",
+    },
+    protein_g: {
+      type: "number",
     },
     rationale: {
       type: "string",
@@ -157,9 +203,15 @@ const analysisSchema = {
   required: [
     "title",
     "estimated_calories",
+    "protein_g",
+    "carbs_g",
+    "fats_g",
     "foods",
     "rationale",
     "confidence",
+    "intake_signal",
+    "diet_feedback",
+    "next_meal_suggestion",
     "notes_suggestion",
   ],
   type: "object",
@@ -170,6 +222,7 @@ async function callOpenAIAnalysis(
   model: string,
   imageFile: File,
   hintText: string,
+  contextText: string,
 ) {
   const imageUrl = await fileToDataUrl(imageFile);
 
@@ -179,7 +232,7 @@ async function callOpenAIAnalysis(
         {
           content: [
             {
-              text: getPrompt(hintText),
+              text: getPrompt(hintText, contextText),
               type: "input_text",
             },
             {
@@ -237,6 +290,7 @@ async function callGeminiAnalysis(
   model: string,
   imageFile: File,
   hintText: string,
+  contextText: string,
 ) {
   const modelsToTry = Array.from(
     new Set([model, GEMINI_FALLBACK_MODEL]),
@@ -279,7 +333,7 @@ async function callGeminiAnalysis(
                   },
                 },
                 {
-                  text: getPrompt(hintText),
+                  text: getPrompt(hintText, contextText),
                 },
               ],
             },
@@ -371,6 +425,9 @@ async function callGeminiAnalysis(
 
 export async function POST(request: Request) {
   let aiConfig;
+  let user = null;
+  let isPremium = false;
+  let currentUsage = null;
 
   try {
     aiConfig = getAiConfig();
@@ -385,17 +442,39 @@ export async function POST(request: Request) {
   if (hasSupabaseEnv) {
     const supabase = await createClient();
     const {
-      data: { user },
+      data: { user: authUser },
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (!authUser) {
       return jsonError("Sua sessao expirou. Entre novamente para usar a IA.", 401);
+    }
+
+    user = authUser;
+    const subscription = await getUserSubscription(authUser.id);
+    isPremium = Boolean(subscription?.isActive);
+    currentUsage = getAiUsageSnapshot({
+      isPremium,
+      user: authUser,
+    });
+
+    if (currentUsage.reachedLimit) {
+      return NextResponse.json(
+        {
+          error:
+            "Seu plano gratuito ja usou as 3 analises de hoje. Assine o premium para liberar analises ilimitadas ou volte amanha.",
+          usage: currentUsage,
+        },
+        { status: 403 },
+      );
     }
   }
 
   const formData = await request.formData();
   const imageValue = formData.get("image");
   const titleHint = formData.get("titleHint");
+  const rawObjective = formData.get("objective");
+  const rawCalorieGoal = formData.get("calorieGoal");
+  const rawCurrentDayCalories = formData.get("currentDayCalories");
 
   if (!isUploadedFile(imageValue)) {
     return jsonError("Envie uma foto da refeicao para usar a analise por IA.");
@@ -413,6 +492,26 @@ export async function POST(request: Request) {
     typeof titleHint === "string" && titleHint.trim()
       ? `O usuario acha que pode ser algo como: ${titleHint.trim()}. Use isso apenas como pista fraca, nunca como verdade.`
       : "Nao assuma o nome do prato sem evidencias visuais suficientes.";
+  const contextParts: string[] = [];
+
+  if (typeof rawObjective === "string" && rawObjective.trim()) {
+    contextParts.push(`Objetivo atual do usuario: ${rawObjective.trim()}.`);
+  }
+
+  if (typeof rawCalorieGoal === "string" && rawCalorieGoal.trim()) {
+    contextParts.push(`Meta calorica do dia: ${rawCalorieGoal.trim()} kcal.`);
+  }
+
+  if (typeof rawCurrentDayCalories === "string" && rawCurrentDayCalories.trim()) {
+    contextParts.push(
+      `Ate agora o usuario consumiu aproximadamente ${rawCurrentDayCalories.trim()} kcal hoje.`,
+    );
+  }
+
+  contextParts.push(
+    "Tambem estime proteinas, carboidratos e gorduras. Diga se esta abaixo, equilibrado ou acima da meta de forma prudente. Sugira a proxima refeicao em uma frase curta e util.",
+  );
+  const contextText = contextParts.join(" ");
 
   const result =
     aiConfig.provider === "gemini"
@@ -421,12 +520,14 @@ export async function POST(request: Request) {
           aiConfig.model,
           imageValue,
           hintText,
+          contextText,
         )
       : await callOpenAIAnalysis(
           aiConfig.apiKey,
           aiConfig.model,
           imageValue,
           hintText,
+          contextText,
         );
 
   if (result.error) {
@@ -440,9 +541,18 @@ export async function POST(request: Request) {
     );
   }
 
+  const usage =
+    user && currentUsage
+      ? await incrementAiUsage({
+          isPremium,
+          user,
+        })
+      : null;
+
   return NextResponse.json({
     data: result.analysis,
     message:
-      "Foto analisada. Revise o nome do prato e as calorias antes de salvar a refeicao.",
+      "Foto analisada. Revise calorias, macros e sugestoes antes de salvar a refeicao.",
+    usage,
   });
 }

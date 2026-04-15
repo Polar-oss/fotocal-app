@@ -8,6 +8,32 @@ type PricingGridProps = {
   id?: string;
 };
 
+function getPlanKicker(slug: (typeof pricingPlans)[number]["slug"]) {
+  switch (slug) {
+    case "mensal":
+      return "entrada simples";
+    case "trimestral":
+      return "consistencia com desconto";
+    case "semestral":
+      return "habito com economia";
+    case "anual":
+      return "menor valor mensal";
+  }
+}
+
+function getPlanFootnote(slug: (typeof pricingPlans)[number]["slug"]) {
+  switch (slug) {
+    case "mensal":
+      return "bom para sentir o app na rotina sem alongar o compromisso";
+    case "trimestral":
+      return "um meio-termo forte para quem quer manter o ritmo";
+    case "semestral":
+      return "equilibrio entre economia e constancia no dia a dia";
+    case "anual":
+      return "a escolha mais forte para quem usa foto com IA com frequencia";
+  }
+}
+
 export function PricingGrid({
   ctaHref,
   enableCheckout = false,
@@ -47,7 +73,7 @@ export function PricingGrid({
 
           <div className="mt-5">
             <p className="text-sm font-semibold text-white/68">
-              {plan.slug === "mensal" ? "entrada simples" : "melhor custo por mes"}
+              {getPlanKicker(plan.slug)}
             </p>
             <h3 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-white">
               {plan.name}
@@ -106,6 +132,10 @@ export function PricingGrid({
               {plan.cta}
             </Link>
           )}
+
+          <p className="mt-3 text-center text-xs leading-6 text-white/45">
+            {getPlanFootnote(plan.slug)}
+          </p>
         </article>
       ))}
     </section>

@@ -30,11 +30,12 @@ export default async function OnboardingPage() {
             Onboarding
           </p>
           <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
-            Defina a sua meta diaria para deixar o resumo mais util.
+            Defina sua meta, objetivo e perfil para deixar a IA mais util.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-white/65">
-            Esse numero ajuda o FotoCal a mostrar total, media e meta restante
-            com mais contexto. Voce pode ajustar depois quando quiser.
+            O FotoCal fica mais inteligente quando entende para onde voce quer
+            ir. Com isso, ele passa a sugerir leituras e proximas escolhas com
+            mais contexto.
           </p>
 
           {!auth.isConfigured ? (
@@ -43,7 +44,12 @@ export default async function OnboardingPage() {
             </div>
           ) : null}
 
-          <GoalForm initialGoal={auth.calorieGoal ?? 2000} />
+          <GoalForm
+            initialGoal={auth.calorieGoal ?? 2000}
+            initialHeightCm={auth.profile.heightCm}
+            initialObjective={auth.profile.objective}
+            initialWeightKg={auth.profile.weightKg}
+          />
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <Link

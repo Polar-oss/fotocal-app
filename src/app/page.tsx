@@ -27,16 +27,20 @@ export default async function Home() {
         <section className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr] lg:items-center lg:gap-10">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur lg:p-10">
             <div className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-200">
-              IA para calorias por foto
+              assistente inteligente de alimentacao
             </div>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.06em] text-white sm:text-5xl lg:text-7xl">
-              Cansado de contar calorias? Tire a foto e deixe o FotoCal agilizar
-              o resto.
+              Tire a foto da refeicao e deixe o FotoCal orientar o proximo passo.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-white/68 sm:text-lg">
-              Receba uma estimativa em segundos, ajuste se quiser e acompanhe o
-              seu dia sem planilha, sem tabela nutricional e sem aquela
-              sensacao de estar fazendo conta o tempo todo.
+              Receba calorias, macros e uma leitura simples do seu dia em
+              segundos. O FotoCal foi feito para ajudar voce a decidir melhor,
+              nao para te prender em conta manual.
+            </p>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-emerald-100/82 sm:text-base">
+              Comece gratis com 3 analises por dia. Quando quiser uso
+              ilimitado e uma rotina sem travas, o premium entra com os ciclos
+              pagos.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -56,21 +60,21 @@ export default async function Home() {
 
             <div className="mt-8 grid gap-4 md:grid-cols-3" id="recursos">
               <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                <strong className="block text-lg text-white">Foto + revisao</strong>
+                <strong className="block text-lg text-white">Foto + macros</strong>
                 <span className="text-sm leading-6 text-white/58">
-                  a IA sugere calorias e voce salva do seu jeito
+                  a IA sugere calorias, proteina, carboidrato e gordura
                 </span>
               </article>
               <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
                 <strong className="block text-lg text-white">Resumo diario</strong>
                 <span className="text-sm leading-6 text-white/58">
-                  total, media e meta restante aparecem no mesmo lugar
+                  total, progresso e recomendacao aparecem no mesmo lugar
                 </span>
               </article>
               <article className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-                <strong className="block text-lg text-white">Planos flexiveis</strong>
+                <strong className="block text-lg text-white">Objetivo real</strong>
                 <span className="text-sm leading-6 text-white/58">
-                  mensal, trimestral, semestral e anual com desconto real
+                  emagrecer, manter ou ganhar massa com contexto melhor
                 </span>
               </article>
             </div>
@@ -95,7 +99,7 @@ export default async function Home() {
                   <span className="text-sm text-white/70">Analise da refeicao</span>
                   <strong className="mt-2 block text-3xl">Bowl de frango e arroz</strong>
                   <span className="mt-3 block text-sm text-white/65">
-                    540 kcal estimadas com confianca media
+                    540 kcal, 38g de proteina e proximo passo sugerido
                   </span>
                 </article>
                 <article className="grid gap-3 sm:grid-cols-2">
@@ -123,8 +127,8 @@ export default async function Home() {
               </p>
               <ul className="mt-4 space-y-3 text-sm leading-7 text-white/80">
                 {[
-                  "uma forma mais leve de acompanhar o que comeu",
-                  "estimativa rapida antes de registrar a refeicao",
+                  "um guia mais inteligente do que um contador simples",
+                  "estimativa rapida com macros antes de registrar a refeicao",
                   "planos com economia clara para quem quer manter a rotina",
                 ].map((step) => (
                   <li key={step} className="flex gap-3">
@@ -217,7 +221,7 @@ export default async function Home() {
           <SectionHeading
             eyebrow="Planos"
             title="Escolha o ciclo que encaixa melhor no seu bolso e na sua rotina."
-            description="Comece no mensal ou economize mais nos ciclos maiores. Todos os planos incluem analise por foto, historico e meta personalizada."
+            description="Voce pode testar o FotoCal gratis com 3 analises por dia. Nos planos premium, a IA fica liberada sem limite, junto com historico, meta e a rotina completa."
           />
 
           <div className="mt-8">

@@ -11,6 +11,7 @@ type PricingPageProps = {
   searchParams: Promise<{
     checkout?: string;
     detail?: string;
+    source?: string;
   }>;
 };
 
@@ -43,6 +44,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
   const auth = await getAuthContext();
   const params = await searchParams;
   const checkoutNotice = getCheckoutNotice(params.checkout, params.detail);
+  const source = params.source?.trim();
   const signUpHref = "/sign-up?next=/pricing";
   const primaryHref = auth.isAuthenticated ? "/app" : signUpHref;
   const primaryLabel = auth.isAuthenticated ? "Abrir meu app" : "Comecar por R$ 12";
@@ -52,6 +54,26 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
         auth.subscription.status,
       )}.`
     : null;
+  const upgradeNotice =
+    source === "ai-limit"
+      ? "Voce bateu no limite gratis de hoje. Nos planos premium, a analise por foto fica liberada sem travas."
+      : source === "free"
+        ? "Seu plano gratuito ja esta ativo com 3 analises por dia. Aqui voce escolhe quando quer subir para o uso ilimitado."
+        : source === "annual"
+          ? "Se a ideia e economizar mais no valor mensal, o anual continua sendo a melhor oferta do FotoCal."
+          : null;
+  const heroTitle =
+    source === "ai-limit"
+      ? "A conta gratis te levou ate aqui. Agora escolha um plano e siga com a IA liberada."
+      : "Escolha entre mensal, trimestral, semestral ou anual e pague menos conforme a constancia cresce.";
+  const heroDescription =
+    source === "ai-limit"
+      ? "Voce ja sentiu o valor da foto com IA na pratica. O premium entra para manter esse ritmo sem parar na metade do dia."
+      : "O FotoCal foi pensado para caber em momentos diferentes da rotina. Voce pode entrar com o mensal ou travar um valor menor por mes escolhendo os ciclos com desconto.";
+  const heroSupport =
+    source === "ai-limit"
+      ? "No gratis, voce continua com 3 analises por dia. No premium, o limite some e a rotina segue fluindo."
+      : "A conta gratuita continua liberada com 3 analises por foto por dia. O premium remove esse limite e deixa a experiencia mais fluida para quem quer usar com constancia.";
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_24%),linear-gradient(180deg,_#020202_0%,_#060606_60%,_#0b0b0b_100%)] px-4 py-6 sm:px-6 lg:px-8">
@@ -78,18 +100,24 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           </section>
         ) : null}
 
+        {upgradeNotice ? (
+          <section className="rounded-[1.5rem] border border-amber-400/25 bg-amber-400/10 px-5 py-4 text-sm leading-7 text-amber-50">
+            {upgradeNotice}
+          </section>
+        ) : null}
+
         <section className="rounded-[2rem] border border-white/10 bg-[#0b0b0b] p-8 text-white shadow-[0_24px_80px_rgba(0,0,0,0.48)]">
           <div className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-200">
             planos flexiveis
           </div>
           <h1 className="mt-5 max-w-4xl text-5xl font-semibold tracking-[-0.06em]">
-            Escolha entre mensal, trimestral, semestral ou anual e pague menos
-            conforme a constancia cresce.
+            {heroTitle}
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-8 text-white/75">
-            O FotoCal foi pensado para caber em momentos diferentes da rotina.
-            Voce pode entrar com o mensal ou travar um valor menor por mes
-            escolhendo os ciclos com desconto.
+            {heroDescription}
+          </p>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-emerald-100/82">
+            {heroSupport}
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -112,7 +140,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           <SectionHeading
             eyebrow="Escolha seu plano"
             title="Planos para comecar agora e economizar mais com constancia."
-            description="Todos os ciclos incluem analise por foto, resumo diario, meta calorica personalizada e historico completo. O que muda e o valor por mes."
+            description="No gratis, voce testa com 3 analises por dia. Nos ciclos premium, a analise por foto fica liberada sem limite, junto com resumo diario, meta personalizada e historico completo."
           />
 
           <div className="mt-8">
